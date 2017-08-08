@@ -8,13 +8,13 @@ using System.IO;
 using Newtonsoft.Json.Linq;
 using System.Web;
 
-
 namespace MusicBeePlugin
 {
     public partial class Plugin
     {
         private MusicBeeApiInterface mbApiInterface;
         private PluginInfo about = new PluginInfo();
+        private int AutoFlag = 1;
 
         public PluginInfo Initialise(IntPtr apiInterfacePtr)
         {
@@ -32,7 +32,25 @@ namespace MusicBeePlugin
             about.MinInterfaceVersion = MinInterfaceVersion;
             about.MinApiRevision = MinApiRevision;
             about.ReceiveNotifications = ReceiveNotificationFlags.DownloadEvents;
-            about.ConfigurationPanelHeight = 0;   // height in pixels that musicbee should reserve in a panel for config settings. When set, a handle to an empty panel will be passed to the Configure function
+            about.ConfigurationPanelHeight = 40;   // height in pixels that musicbee should reserve in a panel for config settings. When set, a handle to an empty panel will be passed to the Configure function
+
+            string dataPath = mbApiInterface.Setting_GetPersistentStoragePath();
+            dataPath += "GetLyrics_Config.conf";
+            if(!File.Exists(dataPath))
+            {
+                string confString = String.Format("Automatically_chose={0}", AutoFlag.ToString());
+                File.WriteAllText(dataPath, confString);
+            }
+            else
+            {
+                FileStream confFile = new FileStream(dataPath, FileMode.Open);
+                StreamReader confRead = new StreamReader(confFile);
+                string conf_auto = confRead.ReadLine();
+                AutoFlag = conf_auto[20] - '0';
+            }
+            Form test = new Form();
+            test.Text = AutoFlag.ToString();
+            test.ShowDialog();
             return about;
         }
 
@@ -40,6 +58,7 @@ namespace MusicBeePlugin
         {
             // save any persistent settings in a sub-folder of this path
             string dataPath = mbApiInterface.Setting_GetPersistentStoragePath();
+            dataPath += "GetLyrics_Config.conf";
             // panelHandle will only be set if you set about.ConfigurationPanelHeight to a non-zero value
             // keep in mind the panel width is scaled according to the font the user has selected
             // if about.ConfigurationPanelHeight is set to 0, you can display your own popup window
@@ -48,11 +67,23 @@ namespace MusicBeePlugin
                 Panel configPanel = (Panel)Panel.FromHandle(panelHandle);
                 Label prompt = new Label();
                 prompt.AutoSize = true;
-                prompt.Location = new Point(0, 0);
-                prompt.Text = "prompt:";
-                TextBox textBox = new TextBox();
-                textBox.Bounds = new Rectangle(60, 0, 100, textBox.Height);
-                configPanel.Controls.AddRange(new Control[] { prompt, textBox });
+                prompt.Location = new Point(20, 20);
+                prompt.Text = "Automatically select the lyrics (自动选择歌词）";
+
+                CheckBox autoFlag_checked = new CheckBox();
+                if (AutoFlag == 0) autoFlag_checked.Checked = false;
+                else autoFlag_checked.Checked = true;
+                autoFlag_checked.Bounds = new Rectangle(0, 20, autoFlag_checked.Width, autoFlag_checked.Height);
+
+                autoFlag_checked.CheckedChanged += (_object, _event) =>
+                {
+                    if (autoFlag_checked.Checked == true) AutoFlag = 1;
+                    else AutoFlag = 0;
+                    string confString = String.Format("Automatically_chose={0}", AutoFlag.ToString());
+                    File.WriteAllText(dataPath, confString);
+                };
+
+                configPanel.Controls.AddRange(new Control[] { prompt, autoFlag_checked });
             }
             return false;
         }
@@ -62,7 +93,6 @@ namespace MusicBeePlugin
         public void SaveSettings()
         {
             // save any persistent settings in a sub-folder of this path
-            string dataPath = mbApiInterface.Setting_GetPersistentStoragePath();
         }
 
         // MusicBee is closing the plugin (plugin is being disabled by user or MusicBee is shutting down)
@@ -126,49 +156,51 @@ namespace MusicBeePlugin
 
             int ID = SongList[0]["id"].ToObject<int>();//从曲目列表得到歌曲唯一id（默认首选）
 
-            Form frm = new Form();
-            frm.Width = 640;
-            frm.Height = 400;
-            frm.Text = "GetLyrics";
+            if(AutoFlag == 0)
+            { 
+                Form frm = new Form();
+                frm.Width = 640;
+                frm.Height = 400;
+                frm.Text = "GetLyrics";
 
-            ListView list = new ListView();
-            list.Bounds = new Rectangle(new Point(10, 10), new Size(600, 300));
-            list.View = View.Details;
-            list.Columns.Add("name", 200, HorizontalAlignment.Left);
-            list.Columns.Add("album", 200, HorizontalAlignment.Left);
-            list.Columns.Add("singer", 200, HorizontalAlignment.Left);
+                ListView list = new ListView();
+                list.Bounds = new Rectangle(new Point(10, 10), new Size(600, 300));
+                list.View = View.Details;
+                list.Columns.Add("name", 200, HorizontalAlignment.Left);
+                list.Columns.Add("album", 200, HorizontalAlignment.Left);
+                list.Columns.Add("singer", 200, HorizontalAlignment.Left);
 
-            for(int t = 0; t < SongList.Count; t++)
-            {
-                ListViewItem _song = list.Items.Add(SongList[t]["name"].ToObject<string>());
-                _song.SubItems.Add(SongList[t]["album"]["name"].ToObject<string>());
-                string SingerName = "";
-                JArray singers = (JArray)SongList[t]["singer"];
-                for(int i = 0; i < singers.Count; i++)
+                for (int t = 0; t < SongList.Count; t++)
                 {
-                    if(i == 0) SingerName += singers[i]["name"].ToObject<string>();
-                    else SingerName = SingerName + "&" + singers[i]["name"].ToObject<string>();
+                    ListViewItem _song = list.Items.Add(SongList[t]["name"].ToObject<string>());
+                    _song.SubItems.Add(SongList[t]["album"]["name"].ToObject<string>());
+                    string SingerName = "";
+                    JArray singers = (JArray)SongList[t]["singer"];
+                    for (int i = 0; i < singers.Count; i++)
+                    {
+                        if (i == 0) SingerName += singers[i]["name"].ToObject<string>();
+                        else SingerName = SingerName + "&" + singers[i]["name"].ToObject<string>();
+                    }
+                    _song.SubItems.Add(SingerName);
                 }
-                _song.SubItems.Add(SingerName);
+
+                Button submit = new Button();
+                submit.Text = "Select";
+                submit.Bounds = new Rectangle(new Point(10, 320), new Size(600, 30));
+                submit.Click += (_object, _event) =>
+                {
+                    ListView.SelectedIndexCollection selected = new ListView.SelectedIndexCollection(list);
+                    if (selected.Count > 0)
+                    {
+                        ID = SongList[selected[0]]["id"].ToObject<int>();
+                    }
+                    frm.Close();
+                };
+
+                frm.Controls.Add(list);
+                frm.Controls.Add(submit);
+                frm.ShowDialog();
             }
-
-            Button submit = new Button();
-            submit.Text = "Select";
-            submit.Bounds = new Rectangle(new Point(10, 320), new Size(600, 30));
-            submit.Click += (_object, _event) =>
-            {
-                ListView.SelectedIndexCollection selected = new ListView.SelectedIndexCollection(list);
-                if(selected.Count > 0)
-                {
-                    ID = SongList[selected[0]]["id"].ToObject<int>();
-                }
-                frm.Close();
-            };
-
-            frm.Controls.Add(list);
-            frm.Controls.Add(submit);
-            frm.ShowDialog();
-            
 
             var LyricsUrl = String.Format("http://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric.fcg?nobase64=1&musicid={0}&callback=jsonp1&g_tk=5381&jsonpCallback=jsonp1&loginUin=0&hostUin=0&format=jsonp&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq&needNewCode=0", ID.ToString());
             var Lyrequest = (HttpWebRequest)WebRequest.Create(LyricsUrl);
