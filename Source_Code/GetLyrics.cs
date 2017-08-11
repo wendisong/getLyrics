@@ -48,9 +48,6 @@ namespace MusicBeePlugin
                 string conf_auto = confRead.ReadLine();
                 AutoFlag = conf_auto[20] - '0';
             }
-            Form test = new Form();
-            test.Text = AutoFlag.ToString();
-            test.ShowDialog();
             return about;
         }
 
