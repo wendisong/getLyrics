@@ -201,7 +201,7 @@ namespace MusicBeePlugin
 
             var LyricsUrl = String.Format("http://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric.fcg?nobase64=1&musicid={0}&callback=jsonp1&g_tk=5381&jsonpCallback=jsonp1&loginUin=0&hostUin=0&format=jsonp&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq&needNewCode=0", ID.ToString());
             var Lyrequest = (HttpWebRequest)WebRequest.Create(LyricsUrl);
-            Lyrequest.Referer = "https://y.qq.com/";//QQ音乐查询歌词必带
+            Lyrequest.Referer = "https://y.qq.com/portal/player.html/";//QQ音乐查询歌词必带
             var Lyresponse = (HttpWebResponse)Lyrequest.GetResponse();
             var LyricsRawString = new StreamReader(Lyresponse.GetResponseStream()).ReadToEnd();
             LyricsRawString = LyricsRawString.Replace("jsonp1(", "");
